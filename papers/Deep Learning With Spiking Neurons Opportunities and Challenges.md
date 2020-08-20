@@ -58,4 +58,16 @@
 ### Inference with deep SNNs
 
 SNN将输入信号转变为输出信号，这里要讨论输入层和输出层
-- Poisson processes with proportional firing rates
+- rate codes：sub-optimal but effective: Poisson processes with proportional firing rates 只考虑平均频率，忽略了精确的时间信息
+- temporal codes：efficient（脉冲的数量减少）, fast, and map well to hardware，可以通过BP或者STDP训练，可以实现maxima pooling，但是准确性不高
+   1. rank-order code in which every neuron can fire at most once
+   2. the output of a neuron is the time of its first spike
+- In order to tune the trade-off between rate-based and temporal coding, Lagorce et al. (2017) and Sironi et al. (2018) propose to use time surfaces around event input as hierarchical features.**(具体情况还要再看）**     
+
+在输出的部分，也要进行转换：
+- report the class corresponding to the neuron with the highest firing rate over some time period or over a fixed number of total output spikes
+- report the neuron firing first as the output class
+- 将 the number of output spikes 加入考量效果会最好
+- 另外，可以被优化as early as possible产生正确的输出脉冲，使用larger populations of neurons，以及temporal smoothing
+
+### 3 Training of Deep SNNs
