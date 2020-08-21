@@ -70,4 +70,40 @@ SNN将输入信号转变为输出信号，这里要讨论输入层和输出层
 - 将 the number of output spikes 加入考量效果会最好
 - 另外，可以被优化as early as possible产生正确的输出脉冲，使用larger populations of neurons，以及temporal smoothing
 
-### 3 Training of Deep SNNs
+### 3 Training of Deep SNNs   
+
+the integration of the timing of spikes into the training process, only required for asynchronous SNNs, requires additional effort. 主要有五种方向的方法：
+- Binarization of ANNs: Conventional DNNs are trained with binary activations, but maintain their synchronous mode of information processing
+- Conversion from ANNs: Conventional DNNs are trained with BP, and then all analog neurons are converted into spiking ones
+- Training of constrained networks: Before conversion, conventional DNN training methods are used together with constraints that model the properties of the spiking neuron models
+- Supervised learning with spikes: Directly training SNNs sing variations of error backpropagation
+- local learning rules at synapses, such as STDP, are used for more biologically realistic training.   
+
+### 3.1 Binary DNNs   
+介绍的是带有二进制激活值以及低比特权重的网络训练算法
+- 相比SNNs：propagate information in a synchronized way and layer-by-layer like in conventional DNNs.
+- 相比DNNs: energy-efficient due to sparse activations and computation on demand. 无论是CPUs，GPUs还是event-based neuromorphic systems，（考虑内存带宽，乘加运算（简化成bitwise XNORs and bit counting），权重kernel重用）   
+
+不考虑浮点训练然后二值化的方案，从开始就采用二值化的激活值，则主要有两种方法：
+- deterministic methods: apply straight-through-estimators to approximate non-differentiable activation functions during BP and accumulate gradients on so-called shadow weights. 前向的时候，激活值和浅权重被量化，反向时通过假设激活值和权重都是连续值来计算梯度。通过在浅权重中积累的方式，量化的权重可以在每次很小的改变下进行更新。
+- stochastic methods: expectation backpropagation, where neuron activations and synaptic weights are represented by probability distributions updated by backpropagation.
+- 此外： normalization of activations, modifications of regularizers, gradual transitions from soft to hard binarizations, adding noise on activations and weigts and knowledge distillation. 通常性能会下降，通过增加宽度来补偿。输入输出通常不进行二值化，计算代价不高，如果二值化性能下降很大。二值化也提高了鲁棒性。将二值化从01变成-1 1 提高了收敛性。1bit的数据会导致神经硬件的实现不再是sparse的，也可以将payload中的bit数增加。    
+
+总结：高效的inference，带来的是性能的降低，训练时间的提升，训练算法更加复杂，网络的增大。由于高效性，属于独立于SNN的一个研究领域。   
+
+### 3.2 Conversion of DNNs
+为了规避（circumvent）脉冲网络中的梯度下降问题，将传统训练好的DNNs转化为SNNs by adapting weights and parameters of the spiking neurons. 目标是是先同样的input-output mapping。这个mapping不止包含网络本身，还包括输入输出的编码。
+- 所有都是rate-coding（激活值对应放射率） **可以不吗**
+- 权重需要被rescaled，根据脉冲神经元的参数 eg：leak rates or refractory times。（在conversion之前作为参数，不参与原来网络的训练）  
+
+优缺点：
+- 优点：可以利用DNN的训练工具，不考虑后续转换，性能好：benchmark records
+- 缺点：不是所有的ANN都可以轻松转换成SNN
+    1. ANN的激活值有负值，而SNN的频率没有负数；ANN在不同的输入下会产生可正可负的激活值，脉冲神经元分为激活和抑制（唯一带有正的还是负的突触）解决方法：1.对每个ANN产生两组互斥的脉冲神经元 2. ReLU激活函数。 Sigmoid函数由于非线性就需要额外的近似并且引入了额外的误差，相比ReLU。负的激活值对于输出层中的softmax层有很大的影响，但也有相应的解决方案。
+    2. max-pooling很难实现，因为是非线性的，and cannot be computed on a spike-by-spike basis。大多数通过利用average pooling来避开这个问题，但是会产生性能的下降。通过一些机制可以做到只让最大发射频率善生的脉冲通过，这产生了更好的准确性。通过latency codes的方式可以实现max operations，但是这和conversion中用到的rate codes不兼容。
+- 问题：ReLU全层的线性rescale不会改变最后输出的类别，但是SNN会受到影响。
+    1. Low firing rates 对于noisy firing rates and temporal jitter（不稳定） of spikes很敏感，会增加每个估计之间的variance并且拉长可靠估计产生的时间。
+    2. High firing rates 当predicted firing rates 超过了由参数决定的神经元最大发射频率时候会出问题。方法是通过propagate训练集中的一个子集，观测每一层的发射频率，然后rescale没层的输入权重，使得达到最终的目标频率   
+
+conversion 和 weight normalization会伴随着更多脉冲的问题，进而就没那么高效。latency and accuracy之间的trade-off可以通过让SNN今早达到目标来补偿产生的影响。   
+为了解决在频率编码上转换不高效的问题，一个重要的研究方向就是alternative spike codes based on the timing information.(相关的研究论文在文中被列出）
